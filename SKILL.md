@@ -15,6 +15,21 @@ DSH 的 `send_message` 只覆盖自己的父子 agent；Codex 是**另一个运�
 | **读**它做了什么 | `~/.codex/sessions/**/rollout-*.jsonl`（明文，非 zstd） | `list` / `threads` / `state` / `tail` / `watch` |
 | 独立核对它动了什么 | 文件 mtime、端口、进程 | `state <id> --verify <目录>` |
 | **写**给它一条消息（需授权） | `codex queue --thread <id> --message <text>` | `send`（默认 dry-run） |
+| ⭐ **双向**：它也能回我 | 双方共写的 `_collab/` 信箱 + 我挂后台 `await` | `mail post/read/await` |
+
+### ⭐ 为什么需要 `mail`：`send` 是**单向**的
+
+`send` 只能把消息**塞进对方会话**（它以"用户身份"收到）—— 对方**没有地址可以回给我**。
+那是"单方面交差"，不是合作。双向需要一个**双方都能读写的落点**：
+
+- 我 → 它：写 `_collab/from-peer.md`，再 `codex queue` 敲一下（**queue 能唤醒它开新一轮**，已实测）；
+- 它 → 我：它写 `_collab/to-peer.md`，我挂一个 **`mail await` 后台任务**等它 ——
+  **任务结束时宿主会唤醒我**，于是"它主动找我"成立，**且不需要任何 auth 后门**。
+
+对比 `dsh-peer-sessions` 那条路（读签名密钥、打 DSH 内部 `/api`、消息以"用户身份"进对方会话），
+信箱方案**不碰凭据、不用内部件、纯文本可审计、可回放**。代价是**唤醒方向不对称**：
+我能敲醒它，它只能靠我轮询/挂等待任务来"叫醒"我（而不是直接推）。
+
 
 **为什么不走 MCP**：DSH 核心不支持 MCP 客户端；而 Codex 的 `codex mcp` 是"让 Codex 去连外部 MCP server"，方向相反。`codex queue` + 明文 rollout 已经够用。
 
