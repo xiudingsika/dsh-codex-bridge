@@ -412,10 +412,11 @@ if (cmd === 'mail') {
   const sub = argv[1] || 'status';
   // ⚠️ 先用白名单校验，再分支 —— 否则 async 分支（await）挂起定时器后会**继续往下走**，
   //    落到末尾那条"未知子命令"并 process.exit，把定时器一起杀掉。
-  //    这个模式我在 watch 上踩过一次，又在 mail await 上踩了第二次（同一个错犯两次 ⇒ 需要机器闸门，
-  //    所以同时加了 `selftest` 子命令，专门验这两条 async 路径）。
-  if (!new Set(['status', 'post', 'read', 'await']).has(sub)) {
-    console.error('mail 子命令：status | post | read | await');
+  //    这个模式我在 watch 上踩过一次，又在 mail await 上踩了第二次（同一个错犯两次 ⇒ 需要机器闸门）。
+  //    ⚠️ 诚实说明：我这里**还只做到"手工验证"**（`mail await --timeout 3` 必须活满 3 秒再 exit=1），
+  //       **没有**自动化回归。下一步应当把它做成 `selftest` 子命令，否则下次还会犯。
+  if (!new Set(['status', 'post', 'read', 'reply', 'await']).has(sub)) {
+    console.error('mail 子命令：status | post | read | reply | await');
     process.exit(2);
   }
   if (sub === 'status') {
@@ -444,6 +445,20 @@ if (cmd === 'mail') {
       console.log('  敲一下 thread ' + pickd.s.threadId + ' → exit=' + res.status + ' ' + String(res.stdout || '').trim().slice(0, 120));
       process.exit(res.status === 0 ? 0 : 1);
     }
+    process.exit(0);
+  }
+  if (sub === 'reply') {
+    // 给"另一方"用的写回命令（Codex 侧 / 人类）——手写 markdown 容易把格式写错，
+    // 所以提供一个命令让它只写正文就行。
+    const file = arg('--file');
+    let text = arg('--text', '');
+    if (file) { try { text = fs.readFileSync(file, 'utf8'); } catch (e) { console.error('读不到 ' + file); process.exit(2); } }
+    if (!text.trim()) { console.error('要么 --text，要么 --file'); process.exit(2); }
+    const from = arg('--from', 'codex');
+    const id = 'msg-' + new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14) + '-' + from.slice(0, 3) + Math.random().toString(36).slice(2, 5);
+    appendEntry(MAIL_TO, { id, from, re: arg('--re', '-'), body: text });
+    console.log('已写入 ' + MAIL_TO + '  id=' + id + '  from=' + from);
+    if (has('--print')) console.log('\n' + readEntries(MAIL_TO).slice(-1)[0].body);
     process.exit(0);
   }
   if (sub === 'read') {
