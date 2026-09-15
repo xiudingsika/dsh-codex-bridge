@@ -245,6 +245,21 @@ if (cmd === 'state') {
   console.log('\n  最近的工具调用');
   for (const t of s.lastTools) console.log('    · ' + t);
 
+  // ── 活跃判定：**必须采样 size，不能看 mtime** ──────────────────────────────
+  // 实测坑（2026-09-16）：Codex 一直持有 rollout 文件句柄并追加写入，
+  // 而 Windows **不在目录项上刷新 mtime** —— 文件从 3.6MB 涨到 4.73MB，
+  // mtime 却一直是首次写入那一刻。第一版据此报"空闲 54 分钟"，
+  // 实际它正在干活 ⇒ **会把在干活的当成空闲**，这是监理最危险的一种误判。
+  // size 是立即可见的，所以用两次采样之间的增量来判定。
+  const sizeA = (() => { try { return fs.statSync(r.file).size; } catch { return 0; } })();
+  await new Promise((res) => setTimeout(res, 900));
+  const sizeB = (() => { try { return fs.statSync(r.file).size; } catch { return 0; } })();
+  const grew = sizeB - sizeA;
+  console.log('  活跃判定     ' + (grew > 0
+    ? '★ **正在写入**（0.9 秒内 +' + grew + ' 字节）'
+    : '0.9 秒内无写入（可能空闲，也可能在思考/等模型返回；要看更久用 watch）'));
+  console.log('  ⚠️ mtime 不可信：rollout 由 Codex 持有，Windows 常不刷新它 —— 上面那行才是判据');
+
   const dir = arg('--verify');
   if (dir) {
     console.log('\n=== 独立验证：它到底动了什么（mtime > 最后活动）===');

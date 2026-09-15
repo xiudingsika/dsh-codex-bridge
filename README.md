@@ -68,9 +68,13 @@ CODEX_BIN=/path/to/codex node scripts/codex-bridge.mjs list
 |---|---|
 | `list` / `threads` / `state`（含 `--verify`）/ `tail` / `watch` / `help` | ✅ 已实测 |
 | `send`（dry-run，不加 `--yes`） | ✅ 已实测：只打印，不投递 |
-| `send --yes`（真发） | ⚠️ **未实测** —— 会插进使用中的会话，作者刻意没拿真实会话做实验 |
+| `send --yes`（真发） | ✅ **已实测**：返回 `Queued message <id> for thread <id>`，且对方确实开了新一轮 |
 
-⇒ **读侧充分验证；写侧只验证到 dry-run。**
+⚠️ 但 `Queued message` 只证明**进了队**，不等于对方处理了 —— 要自己回来 `state` / `watch` 看轮次有没有涨。
+
+⚠️ 另一个实测坑：**`mtime` 不可信**。Codex 持有 rollout 文件句柄持续追加时，Windows 不刷新 mtime
+（实测文件从 3.6MB 涨到 4.73MB 而 mtime 不动），所以**活跃判定要采样 `size`**，别用 mtime ——
+否则会把正在干活的对方误判成空闲。
 
 ## 已知限制
 
